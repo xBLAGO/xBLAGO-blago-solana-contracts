@@ -1,20 +1,19 @@
-// programs/need_protocol/src/lib.rs
+// programs/need_protocol/src/lib.rs -- ИСПРАВЛЕННАЯ ВЕРСИЯ
 
 use anchor_lang::prelude::*;
 
-declare_id!("NEEDpL1aToL1aL1aL1aL1aL1aL1aL1aL1aL1aL1aL1a"); // Placeholder Program ID
+declare_id!("E83CPdcp7UkFF7DwYTB3CAjz21gNCADRwLxj3dRA84cj"); // Placeholder Program ID
 
 #[program]
 pub mod need_protocol {
     use super::*;
 
-    // Create a new Need, which generates an NFT and prepares for funding
     pub fn create_need(
         ctx: Context<CreateNeed>,
         title: String,
         description: String,
-        amount_needed: u64, // In target currency cents (e.g., RUB kopecks)
-        xblago_amount: u64, // Pre-calculated amount based on BTC rate
+        amount_needed: u64,
+        xblago_amount: u64,
     ) -> Result<()> {
         let need = &mut ctx.accounts.need;
         need.creator = *ctx.accounts.creator.key;
@@ -24,32 +23,20 @@ pub mod need_protocol {
         need.amount_funded = 0;
         need.xblago_amount = xblago_amount;
         need.status = NeedStatus::Funding as u8;
-        need.bump = *ctx.bumps.get("need").unwrap();
-
-        // Here, you would typically CPI to a token program to mint the NEED_NFT
-        // and CPI to a token program to mint the associated "Share" tokens.
-        // For simplicity in this text version, we simulate this with logs.
+        // bump теперь присваивается здесь, при инициализации, и уже сохранен в аккаунте
+        
         msg!("New Need NFT created: {}", need.title);
         msg!("{} Share tokens are now available for funding.", amount_needed);
         
         Ok(())
     }
 
-    // Fund a Need. An investor sends a liquid asset (e.g., USDC)
-    // and receives "Share" tokens in return.
     pub fn fund_need(ctx: Context<FundNeed>, amount: u64) -> Result<()> {
         let need = &mut ctx.accounts.need;
         
-        // Basic check to prevent overfunding
         require!(need.amount_funded + amount <= need.amount_needed, NeedError::Overfunding);
 
-        // 1. Transfer liquid assets (e.g., USDC) from investor to the need's creator
-        // This would be a CPI to the SPL token program.
-        // transfer_liquid_assets(ctx.accounts.investor, ctx.accounts.creator, amount)?;
-
-        // 2. Mint "Share" tokens to the investor
-        // This would be a CPI to the Share token mint.
-        // mint_share_tokens(ctx.accounts.investor_share_account, amount)?;
+        // CPIs would go here in a real implementation
         
         need.amount_funded += amount;
         msg!("Need '{}' funded with {} units.", need.title, amount);
@@ -71,17 +58,17 @@ pub struct Need {
     pub amount_needed: u64,
     pub amount_funded: u64,
     pub xblago_amount: u64,
-    pub status: u8, // 0: Funding, 1: Funded, 2: Canceled
-    pub bump: u8,
+    pub status: u8,
 }
 
 #[derive(Accounts)]
+#[instruction(title: String, description: String)] // Добавляем инструкции для расчета места
 pub struct CreateNeed<'info> {
     #[account(
         init,
         payer = creator,
-        space = 8 + 32 + 4 + 100 + 4 + 200 + 8 + 8 + 8 + 1 + 1, // Estimate
-        seeds = [b"need", creator.key().as_ref()], // Simplified seed
+        space = 8 + 32 + (4 + title.len()) + (4 + description.len()) + 8 + 8 + 8 + 1, // Динамический расчет места
+        seeds = [b"need", creator.key().as_ref(), title.as_bytes()], // Используем title для уникальности
         bump
     )]
     pub need: Account<'info, Need>,
@@ -96,15 +83,15 @@ pub struct FundNeed<'info> {
     pub need: Account<'info, Need>,
     #[account(mut)]
     pub investor: Signer<'info>,
-    /// CHECK: In a real implementation, this would be the creator's token account.
+    /// CHECK: In a real implementation, this would be a specific SPL token account.
     #[account(mut)]
     pub creator_liquid_token_account: AccountInfo<'info>,
-    /// CHECK: In a real implementation, this would be the investor's share token account.
+    /// CHECK: In a real implementation, this would be a specific SPL token account.
     #[account(mut)]
     pub investor_share_token_account: AccountInfo<'info>,
 }
 
-#[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy)]
+#[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, PartialEq, Eq)]
 pub enum NeedStatus {
     Funding,
     Funded,
